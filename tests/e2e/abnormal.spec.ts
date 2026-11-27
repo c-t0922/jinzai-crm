@@ -1,6 +1,6 @@
 /** 異常系・非機能（docs/12_test_plan.md 3章）。権限違反・同時操作・二重登録・通信断・発信前チェック・自動ログアウト・表示 */
 import { expect, test } from "@playwright/test";
-import { login, relaxCallingHours, shownContactId, sql, sqlAs, userId, waitContact } from "./helpers";
+import { login, PASSWORD, relaxCallingHours, shownContactId, sql, sqlAs, userId, waitContact } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 const CALLER = "caller08@example.test";
@@ -60,7 +60,7 @@ test.describe("権限違反", () => {
     try {
       await page.goto("/login");
       await page.fill("#email", "caller07@example.test");
-      await page.fill("#password", process.env.SEED_USER_PASSWORD ?? "LocalDev#2026");
+      await page.fill("#password", PASSWORD);
       await page.click("button[type=submit]");
       await expect(page.getByText(/利用停止中/)).toBeVisible();
     } finally {
