@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
+// 社内業務システムのため全画面がユーザー依存の動的データ。
+// Cache Components は使わず、従来の動的レンダリングで運用する（docs/02 参照）。
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  poweredByHeader: false,
   turbopack: {
     rules: {
       "*.css": {
