@@ -186,3 +186,26 @@ insert into application_status_masters(code, label, sort_order, is_terminal) val
 
 insert into integration_settings(service, mode, config) values
  ('cti', 'mock', '{"provider": "mock"}'), ('kintone', 'mock', '{}'), ('lp', 'mock', '{}');
+
+-- =====================================================================
+-- 管理者・PM の多要素認証を DB 側でも強制（aal2 のセッションでなければ管理権限を持たない）
+-- =====================================================================
+insert into call_rules(key, value, description) values
+ ('mfa_required', 'true', '管理者・PM の多要素認証必須（ローカル開発のみ false 可）');
+
+create or replace function mfa_ok() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select (value)::text::boolean from call_rules where key = 'mfa_required'), true) = false
+      or coalesce(auth.jwt()->>'aal', 'aal1') = 'aal2'
+$$;
+
+create or replace function is_manager() returns boolean
+language sql stable security definer set search_path = public as $$
+  select mfa_ok() and exists(select 1 from user_roles where user_id = app_user_id() and role in ('admin','pm'))
+$$;
+
+create or replace function has_role(r app_role) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists(select 1 from user_roles where user_id = app_user_id() and role = r)
+     and (r not in ('admin','pm') or mfa_ok())
+$$;

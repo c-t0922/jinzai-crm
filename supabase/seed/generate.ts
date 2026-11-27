@@ -73,6 +73,8 @@ async function main() {
     if (u.email?.endsWith("@example.test")) await admin.auth.admin.deleteUser(u.id);
   }
 
+  // ローカル開発で MFA を省略する場合のみ（本番では常に true）
+  await db.query(`update call_rules set value = $1 where key = 'mfa_required'`, [JSON.stringify(process.env.MFA_ENFORCE !== "false")]);
   log("チーム・ユーザー作成");
   const teams = await db.query<{ id: string; name: string }>(
     `insert into teams(name, base_location) values ('第1チーム','東京本社'),('第2チーム','東京本社') returning id, name`,

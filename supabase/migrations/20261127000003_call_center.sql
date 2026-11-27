@@ -109,6 +109,7 @@ begin
     where a.user_id = uid and a.released_at is null
       and c.callable and c.queue_state in ('new','recall')
       and (c.recall_block_until is null or c.recall_block_until <= now())
+      and (a.call_list_id is null or exists(select 1 from call_lists cl2 where cl2.id = a.call_list_id and cl2.status = 'active'))
   ), tabbed as (
     select * from mine m where case p_tab
       when 'today' then (m.next_call_at is null or m.next_call_at <= now() + interval '12 hours')
@@ -151,6 +152,7 @@ begin
       and (c.next_call_at is null or c.next_call_at <= now())
       and (c.recall_block_until is null or c.recall_block_until <= now())
       and (p_skip is null or c.id <> p_skip)
+      and (a.call_list_id is null or exists(select 1 from call_lists cl2 where cl2.id = a.call_list_id and cl2.status = 'active'))
       and not exists(select 1 from contact_locks l where l.contact_id = c.id and l.expires_at > now() and l.user_id <> uid)
     order by queue_rank(c), c.next_call_at nulls last, c.first_inquiry_at desc nulls last
     limit 20

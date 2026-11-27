@@ -484,3 +484,13 @@ begin
   ) into res;
   return res;
 end $$;
+
+-- 引き継ぎの確認（面談担当者）
+create or replace function handoff_ack(p_appointment uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := require_user();
+begin
+  update handoffs set acknowledged_at = now()
+  where appointment_id = p_appointment and acknowledged_at is null
+    and (to_user_id = uid or is_manager());
+end $$;
