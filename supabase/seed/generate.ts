@@ -64,7 +64,10 @@ async function main() {
     truncate call_results, call_recordings, call_logs, call_drafts, idempotency_keys, handoffs, appointments, tasks,
       notifications, assignments, contact_locks, call_list_members, call_lists, suppression_list, consents,
       contact_sources, contact_phones, duplicate_candidates, contacts, goals, scripts, team_members, user_roles,
-      users, teams, audit_logs, export_logs, login_history, saved_searches cascade`);
+      audit_logs, export_logs, login_history, saved_searches, notifications cascade`);
+  // 設定テーブル（call_rules 等）を巻き込まないよう、ユーザー・チームは DELETE で消す
+  await db.query(`update call_rules set updated_by = null; update integration_settings set updated_by = null`);
+  await db.query(`delete from users; delete from teams`);
   const { data: existing } = await admin.auth.admin.listUsers({ perPage: 1000 });
   for (const u of existing?.users ?? []) {
     if (u.email?.endsWith("@example.test")) await admin.auth.admin.deleteUser(u.id);
@@ -100,7 +103,7 @@ async function main() {
         array['東京都','神奈川県','埼玉県','千葉県','大阪府','愛知県','福岡県','兵庫県','北海道','静岡県'] pref,
         array['住宅LP-注文住宅','住宅LP-分譲','住宅LP-リフォーム','資料請求LP','見学会LP'] lp
     ), base as (
-      select g, (g * 7919) % 30 + 1 li, (g * 104729) % 20 + 1 fi, random() r1, random() r2, random() r3
+      select g, 1 + floor(random() * 30)::int li, 1 + floor(random() * 20)::int fi, random() r1, random() r2, random() r3
       from generate_series(1, ${CONTACTS}) g
     )
     insert into contacts(last_name, first_name, last_name_kana, first_name_kana, email, email_normalized,
@@ -141,25 +144,20 @@ async function main() {
     select phone_hash, id, 'refusal', '架空データ', now() - interval '60 days' from s`);
   await db.query(`update contacts c set is_suppressed = true, callable = false, queue_state = 'closed'
                   from suppression_list s where s.contact_id = c.id`);
-  // 重複候補 約 2%（同じ電話番号の別レコード）
+  // 重複候補 約 2%（同じ電話番号・同姓同名の別レコード。自動統合はしない）
   await db.query(`
-    with src as (select c.*, p.phone_e164 from contacts c join contact_phones p on p.contact_id = c.id
+    with src as (select c.*, p.phone_raw, p.phone_e164, p.phone_hash, gen_random_uuid() new_id
+                 from contacts c join contact_phones p on p.contact_id = c.id
                  where not c.is_suppressed order by random() limit ${Math.floor(CONTACTS * 0.02)}),
     dup as (
-      insert into contacts(last_name, first_name, last_name_kana, first_name_kana, email, email_normalized, area_pref, area_city,
+      insert into contacts(id, last_name, first_name, last_name_kana, first_name_kana, area_pref, area_city,
         first_inquiry_at, primary_source, source_detail, consent_status, has_valid_phone, callable, created_at)
-      select last_name, first_name, last_name_kana, first_name_kana, null, null, area_pref, area_city,
-        first_inquiry_at + interval '200 days', primary_source, source_detail, 'unknown', true, false, created_at + interval '200 days'
-      from src returning id, last_name, first_name, area_pref, created_at)
-    select 1`);
-  await db.query(`
+      select new_id, last_name, first_name, last_name_kana, first_name_kana, area_pref, area_city,
+        first_inquiry_at + (now() - first_inquiry_at) / 2, primary_source, source_detail, 'unknown', true, false,
+        created_at + (now() - created_at) / 2
+      from src returning id)
     insert into contact_phones(contact_id, phone_raw, phone_e164, phone_hash)
-    select d.id, p.phone_raw, p.phone_e164, p.phone_hash
-    from contacts d
-    join lateral (select c.id from contacts c where c.last_name = d.last_name and c.first_name = d.first_name
-                  and c.area_pref = d.area_pref and c.created_at = d.created_at - interval '200 days' limit 1) o on true
-    join contact_phones p on p.contact_id = o.id
-    where d.email is null and not exists(select 1 from contact_phones x where x.contact_id = d.id)`);
+    select new_id, phone_raw, phone_e164, phone_hash from src`);
   await db.query(`
     insert into duplicate_candidates(contact_id_a, contact_id_b, match_keys, score)
     select least(a.contact_id, b.contact_id), greatest(a.contact_id, b.contact_id), array['phone','name'], 0.9
