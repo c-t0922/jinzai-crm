@@ -18,7 +18,7 @@
 |---|---|---|
 | フレームワーク | Next.js（App Router） | 実装開始時点の安定版を確認して固定 |
 | 言語 | TypeScript（`strict: true`） | `any` 禁止。やむを得ない場合は理由コメント |
-| UI | Tailwind CSS + shadcn/ui | 独自デザイントークンは `src/styles/tokens.css` に集約 |
+| UI | Tailwind CSS + shadcn/ui（形式） | デザイントークンは `src/app/globals.css` の `@theme` に集約。shadcn のレジストリに接続できない環境のため、同じ構成（radix-ui＋cva）で `src/components/ui/` に手書きしている |
 | アイコン | Lucide Icons | |
 | グラフ | Recharts | |
 | DB | Supabase（PostgreSQL） | スキーマ変更は必ずマイグレーションファイルで行う |
@@ -88,13 +88,18 @@
 - 新規リポジトリ作成・push・PR 作成・Phase の開始前には **社長に確認を取る**。
 - 未確定事項は `docs/13_open_questions.md` に追記し、まとめて確認する。
 
-## 8. よく使うコマンド（Phase 1 着手時に確定）
+## 8. よく使うコマンド
 
 ```bash
-pnpm dev            # 開発サーバー
+pnpm db:start       # ローカル Supabase 起動（Docker 必須）
+pnpm db:reset       # マイグレーション適用＋架空データ投入（25 万件。少量なら pnpm seed --contacts=20000）
+pnpm dev            # 開発サーバー（http://127.0.0.1:3000）
 pnpm test           # 単体テスト（Vitest）
-pnpm test:e2e       # E2E（Playwright）
-pnpm db:reset       # ローカル Supabase をリセットし架空データを投入
-pnpm db:test        # RLS テスト（pgTAP）
+pnpm db:test        # RLS・権限テスト（pgTAP）
+pnpm test:e2e       # E2E 業務シナリオ・異常系（Playwright。架空データ投入済みのローカル DB が前提）
 pnpm lint && pnpm typecheck
+pnpm exec tsx --env-file=.env.local scripts/perf-search.ts   # 検索性能（P95）確認
 ```
+
+- Next.js 16 では Middleware が **Proxy**（`src/proxy.ts`）に改名されている。実装前に `node_modules/next/dist/docs/` を確認すること（AGENTS.md）。
+- ローカルの夜間・日曜は架電時間帯の制限で発信できない。開発時は `call_rules.calling_hours.enforce` を false にする（管理画面「架電ルール設定」でも変更可）。本番では必ず true。

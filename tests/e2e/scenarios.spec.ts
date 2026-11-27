@@ -76,6 +76,7 @@ test("S3〜S7 架電センター：表示→発信→アポ登録→次の顧客
 
   // S4 発信（モック）：call_logs 作成・通話時間カウント
   const me = await userId(CALLER);
+  const resultsBefore = (await sql("select 1 from call_results where contact_id = $1", [apptContactId])).length;
   await page.getByTestId("dial-button").click();
   await expect(page.getByTestId("hangup-button")).toBeVisible();
   await expect(page.getByTestId("call-timer")).not.toHaveText("0:00", { timeout: 10_000 });
@@ -102,7 +103,7 @@ test("S3〜S7 架電センター：表示→発信→アポ登録→次の顧客
   expect(await sql("select 1 from call_logs where contact_id = $1 and started_at > now() - interval '5 minutes'", [nextId])).toHaveLength(0);
 
   const results = await sql("select 1 from call_results where contact_id = $1", [apptContactId]);
-  expect(results).toHaveLength(1);
+  expect(results).toHaveLength(resultsBefore + 1);
   const appts = await sql<{ id: string; advisor_user_id: string }>("select id, advisor_user_id from appointments where contact_id = $1 and status = 'scheduled'", [apptContactId]);
   expect(appts).toHaveLength(1);
   const ho = await sql("select 1 from handoffs where appointment_id = $1", [appts[0].id]);

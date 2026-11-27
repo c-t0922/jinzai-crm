@@ -284,13 +284,7 @@ declare
   next_at timestamptz; appt_id uuid; max_attempts int := coalesce((rule('max_no_answer_attempts'))::text::int, 6);
   block_days int; advisor uuid; res_id uuid;
 begin
-  if not can_call_role() then raise exception 'FORBIDDEN' using errcode = '42501'; end if;
-  if not can_view_contact(p_contact) then
-    -- 画面を開いている間に許諾撤回・架電禁止で担当が外れた場合は、理由を返して画面に表示する
-    if exists(select 1 from contact_locks where contact_id = p_contact and user_id = uid) then
-      reason := call_block_reason(p_contact, uid);
-      if reason is not null then return jsonb_build_object('error', 'NOT_CALLABLE', 'reason', reason); end if;
-    end if;
+  if not can_call_role() or not can_view_contact(p_contact) then
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
   select response into prev from idempotency_keys where key = p_idempotency_key and user_id = uid;

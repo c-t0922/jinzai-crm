@@ -452,8 +452,8 @@ export function CallCenter(props: {
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
       {/* ステータスバー */}
-      <div className="flex h-10 shrink-0 items-center gap-4 border-b border-border bg-white px-4 text-xs">
-        <span className="font-semibold text-slate-900">架電センター</span>
+      <div className="flex h-10 shrink-0 items-center gap-4 overflow-x-auto whitespace-nowrap border-b border-border bg-white px-4 text-xs [&>*]:shrink-0">
+        <span className="hidden font-semibold text-slate-900 sm:inline">架電センター</span>
         <span className="tabular text-slate-600">本日 架電 <b className="text-slate-900">{stats?.calls ?? "—"}</b></span>
         <span className="tabular text-slate-600">接続 <b className="text-slate-900">{stats?.connects ?? "—"}</b></span>
         <span className="tabular text-slate-600">アポ <b className="text-emerald-700">{stats?.appointments ?? "—"}</b></span>
@@ -469,10 +469,10 @@ export function CallCenter(props: {
           {!online ? (
             <Badge tone="rose"><WifiOff className="size-3" /> オフライン</Badge>
           ) : null}
-          <span className={cn("flex items-center gap-1", mics ? "text-slate-500" : "text-amber-700")} title="マイク・ヘッドセットの検出状況">
+          <span className={cn("hidden items-center gap-1 sm:flex", mics ? "text-slate-500" : "text-amber-700")} title="マイク・ヘッドセットの検出状況">
             <Headphones className="size-3.5" /> {mics === null ? "確認中" : mics > 0 ? `マイク ${mics}台` : "マイク未検出"}
           </span>
-          {isDemo ? <Badge tone="violet" data-testid="demo-badge">デモ通話（実際には発信されません）</Badge> : <Badge tone="navy">実通話</Badge>}
+          {isDemo ? <Badge tone="violet" data-testid="demo-badge" title="デモ通話（実際には発信されません）">デモ通話<span className="hidden sm:inline">（実際には発信されません）</span></Badge> : <Badge tone="navy">実通話</Badge>}
           <button type="button" onClick={() => setShowKeys((v) => !v)} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="ショートカット一覧">
             <Keyboard className="size-4" />
           </button>

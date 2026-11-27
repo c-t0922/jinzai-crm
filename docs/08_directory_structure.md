@@ -64,7 +64,7 @@ jinzai-crm/
 │   │   ├── jobs/                 # 同期・集計・リマインダーのジョブ定義
 │   │   └── audit/                # 操作ログ記録
 │   ├── lib/                      # 汎用（日付JST, 電話番号正規化, zod schemas）
-│   ├── styles/tokens.css         # カラー・余白トークン
+│   ├── app/globals.css           # カラー・余白トークン（@theme）
 │   └── middleware.ts             # 認証・自動ログアウト
 ├── tests/
 │   ├── unit/                     # Vitest（domain中心）
