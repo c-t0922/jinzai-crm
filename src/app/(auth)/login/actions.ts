@@ -14,6 +14,12 @@ export async function signIn(_prev: SignInState, form: FormData): Promise<SignIn
   const supabase = await createSupabaseServer();
   const { error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
   if (error) return { error: "メールアドレスまたはパスワードが正しくありません", email: parsed.data.email };
+  // 認証は通っても、CRM 側で停止中・未登録なら入れない
+  const { data: me } = await supabase.rpc("me");
+  if (!me) {
+    await supabase.auth.signOut();
+    return { error: "このアカウントは利用停止中か、CRM に登録されていません。管理者にお問い合わせください", email: parsed.data.email };
+  }
   const h = await headers();
   await supabase.rpc("record_login", { p_event: "login", p_ip: h.get("x-forwarded-for"), p_ua: h.get("user-agent") });
   const next = parsed.data.next && parsed.data.next.startsWith("/") && !parsed.data.next.startsWith("//") ? parsed.data.next : "/dashboard";

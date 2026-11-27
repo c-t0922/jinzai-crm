@@ -43,11 +43,12 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
   return <label className={cn("text-xs font-medium text-slate-600", className)} {...props} />;
 }
 
-export function Field({ label, htmlFor, error, children, className }: { label: string; htmlFor?: string; error?: string; children: React.ReactNode; className?: string }) {
+export function Field({ label, htmlFor, error, hint, children, className }: { label: string; htmlFor?: string; error?: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
+      {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
       {error ? <p className="text-xs text-rose-600" role="alert">{error}</p> : null}
     </div>
   );

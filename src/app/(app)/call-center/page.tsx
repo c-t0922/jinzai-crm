@@ -8,7 +8,7 @@ import type { ResultMaster } from "@/lib/call-result";
 export const metadata: Metadata = { title: "架電センター" };
 
 export default async function CallCenterPage({ searchParams }: { searchParams: Promise<{ contact?: string }> }) {
-  await requireUser("callcenter.use");
+  const me = await requireUser("callcenter.use");
   const sp = await searchParams;
   const supabase = await createSupabaseServer();
   const [masters, scripts, advisors, hours] = await Promise.all([
@@ -32,6 +32,7 @@ export default async function CallCenterPage({ searchParams }: { searchParams: P
       isDemo={cti.isDemo}
       callingHours={hours.data?.value as { enforce: boolean; days: number[]; start: string; end: string } | undefined}
       initialContactId={sp.contact}
+      userName={me.name}
     />
   );
 }

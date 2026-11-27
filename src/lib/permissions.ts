@@ -1,5 +1,6 @@
 /** 権限定義（docs/06_permission_matrix.md）。画面・API で同じ定義を使う。DB は RLS / RPC で再チェックする。 */
-export type Role = "admin" | "pm" | "team_leader" | "caller" | "career_advisor" | "executive";
+export const ROLES = ["admin", "pm", "team_leader", "caller", "career_advisor", "executive"] as const;
+export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "システム管理者",

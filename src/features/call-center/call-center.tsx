@@ -73,6 +73,7 @@ export function CallCenter(props: {
   isDemo: boolean;
   callingHours?: { enforce: boolean; days: number[]; start: string; end: string };
   initialContactId?: string;
+  userName: string;
 }) {
   const { masters, scripts, advisors, isDemo } = props;
   const [tab, setTab] = useState<Tab>("today");
@@ -622,7 +623,7 @@ export function CallCenter(props: {
                   {centerTab === "script" ? (
                     script ? (
                       <div className="space-y-2 text-[13px] leading-relaxed">
-                        {script.body.split("\n").map((line, i) =>
+                        {script.body.replaceAll("{担当者名}", props.userName).replaceAll("{顧客名}", contact.name).split("\n").map((line, i) =>
                           line.startsWith("## ") ? <h3 key={i} className="pt-1 text-xs font-semibold text-primary">{line.slice(3)}</h3>
                           : line.startsWith("- ") ? <p key={i} className="pl-3 text-slate-700">・{line.slice(2)}</p>
                           : line ? <p key={i} className="text-slate-800">{line}</p> : null,
