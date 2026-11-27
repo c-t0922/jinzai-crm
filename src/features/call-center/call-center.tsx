@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -14,9 +14,9 @@ import { EmptyState } from "@/components/states";
 import { cn } from "@/lib/utils";
 import { fmtDate, fmtDateTime, fmtDuration } from "@/lib/format";
 import { BLOCK_REASON_LABEL, fieldsFor, validateResult, type ResultMaster, type SaveResultInput } from "@/lib/call-result";
-import { fromLocalInput, presetJst, toLocalInput } from "@/lib/datetime-local";
+import { fromLocalInput, presetJst } from "@/lib/datetime-local";
 import {
-  getQueue, heartbeat, nextContact, openContact, releaseContact, reportCallStatus, saveDraft, saveResult, startCall, todayStats,
+  endCall, getQueue, heartbeat, nextContact, openContact, releaseContact, reportCallStatus, saveDraft, saveResult, startCall, todayStats,
   type ContactCard,
 } from "@/server/domain/calls/actions";
 import { MockDevice, type CallDevice, type DeviceStatus } from "./mock-device";
@@ -88,7 +88,18 @@ export function CallCenter(props: {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [pending, setPending] = useState(0);
-  const [online, setOnline] = useState(true);
+  const online = useSyncExternalStore(
+    (cb) => {
+      window.addEventListener("online", cb);
+      window.addEventListener("offline", cb);
+      return () => {
+        window.removeEventListener("online", cb);
+        window.removeEventListener("offline", cb);
+      };
+    },
+    () => navigator.onLine,
+    () => true,
+  );
   const [stats, setStats] = useState<{ calls: number; connects: number; appointments: number; goalAppointments: number | null; monthAppointments: number } | null>(null);
   const [scriptId, setScriptId] = useState<string | null>(scripts[0]?.id ?? null);
   const [centerTab, setCenterTab] = useState<"script" | "history">("script");
@@ -102,7 +113,9 @@ export function CallCenter(props: {
   const saveKey = useRef<string>(uuid());
   const dirty = useRef(false);
   const formRef = useRef(form);
-  formRef.current = form;
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
   const master = useMemo(() => masters.find((m) => m.code === form.resultCode), [masters, form.resultCode]);
   const fields = fieldsFor(master);
@@ -133,10 +146,14 @@ export function CallCenter(props: {
     setCenterTab("script");
   }, []);
 
+  // 顧客の読み込みは最後に要求したものだけを反映する（連打・二重実行で古い応答が画面を上書きしないように）
+  const loadSeq = useRef(0);
   const loadNext = useCallback(
     async (skip?: string | null) => {
+      const seq = ++loadSeq.current;
       setLoadingContact(true);
       const r = await nextContact(skip ?? null);
+      if (seq !== loadSeq.current) return;
       setLoadingContact(false);
       if (!r.ok) {
         toast.error("次の顧客を取得できませんでした。通信状態を確認してください。");
@@ -153,8 +170,10 @@ export function CallCenter(props: {
   const open = useCallback(
     async (id: string) => {
       if (inCall) return toast.warning("通話中は顧客を切り替えられません");
+      const seq = ++loadSeq.current;
       setLoadingContact(true);
       const r = await openContact(id);
+      if (seq !== loadSeq.current) return;
       setLoadingContact(false);
       if (!r.ok) {
         toast.error(r.error === "locked_by_other" ? "他の担当者が対応中です" : "この顧客を開けませんでした");
@@ -169,12 +188,21 @@ export function CallCenter(props: {
   );
 
   useEffect(() => {
+    // サーバーからの取得開始（読み込み中表示の更新を含む）。外部データとの同期なので effect で行う
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadQueue(tab);
   }, [tab, loadQueue]);
 
+  const booted = useRef(false);
   useEffect(() => {
+    // 開発時の StrictMode で 2 回実行されてもロックを二重取得しない
+    if (booted.current) return;
+    booted.current = true;
     loadStats();
+    // localStorage はクライアントでしか読めないため、マウント後に反映する（SSR との不一致を避ける）
     setPending(readPending().length);
+    // 初回の顧客取得（外部データとの同期）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (props.initialContactId) open(props.initialContactId);
     else loadNext();
     navigator.mediaDevices
@@ -244,19 +272,13 @@ export function CallCenter(props: {
     }
   }, [loadStats]);
 
+  // 通信復帰時・15秒ごとに未送信の結果を再送
   useEffect(() => {
-    const on = () => {
-      setOnline(true);
-      flushPending();
-    };
-    const off = () => setOnline(false);
+    const on = () => flushPending();
     window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    setOnline(navigator.onLine);
     const t = setInterval(flushPending, 15_000);
     return () => {
       window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
       clearInterval(t);
     };
   }, [flushPending]);
@@ -287,6 +309,16 @@ export function CallCenter(props: {
       setCall(null);
       const msg = r.error === "NOT_CALLABLE" ? BLOCK_REASON_LABEL[r.reason ?? ""] : r.error === "DUPLICATE_DIAL" ? "通話中の発信があります。先に終話してください。" : "発信に失敗しました";
       if (r.reason) setBlockReason(r.reason);
+      if (r.error === "DUPLICATE_DIAL" && r.callLogId) {
+        // ブラウザ終了・通信断で終了できていない通話が残っている場合、ここから終了できる
+        const stale = r.callLogId;
+        toast.error("終了していない通話が残っています", {
+          description: "前の通話を終了してから、もう一度発信してください。",
+          action: { label: "前の通話を終了", onClick: () => endCall(stale).then((x) => (x.ok ? toast.success("前の通話を終了しました") : toast.error("終了できませんでした"))) },
+          duration: 15_000,
+        });
+        return;
+      }
       toast.error(msg ?? "発信できません");
       return;
     }
@@ -503,7 +535,7 @@ export function CallCenter(props: {
                     <span className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
                       <span>{q.area ?? "—"} ・ {q.callCount}回</span>
                       {q.nextCallAt ? (
-                        <span className={cn("tabular", new Date(q.nextCallAt).getTime() <= Date.now() ? "text-amber-700" : "")}>
+                        <span className={cn("tabular", new Date(q.nextCallAt).getTime() <= now ? "text-amber-700" : "")}>
                           <CalendarClock className="mr-0.5 inline size-3" />
                           {fmtDateTime(q.nextCallAt)}
                         </span>

@@ -19,7 +19,10 @@ export function KpiFilters({ preset, from, to, users, teams, lists, show }: {
   const [pending, start] = useTransition();
   const set = (patch: Record<string, string | null>) => {
     const q = new URLSearchParams(sp.toString());
-    for (const [k, v] of Object.entries(patch)) (v ? q.set(k, v) : q.delete(k));
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) q.set(k, v);
+      else q.delete(k);
+    }
     start(() => router.replace(`${pathname}?${q.toString()}`, { scroll: false }));
   };
   return (

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { authorize, AppError } from "@/server/auth/session";
+import { toCsv } from "@/lib/csv";
+import { displayPhone } from "@/lib/format";
 
 type R<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -52,13 +54,8 @@ export async function exportContacts(filter: unknown, reason: string): Promise<R
     const rows = data.rows as Record<string, unknown>[];
     const cols = ["id", "name", "phone", "area_pref", "primary_source", "consent_status", "queue_state", "call_count", "last_called_at", "last_call_result", "first_inquiry_at"];
     const head = ["顧客ID", "氏名", "電話番号", "都道府県", "流入元", "利用許諾", "対応状況", "架電回数", "最終架電", "最終結果", "初回問合せ"];
-    const esc = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : String(v);
-      // CSV インジェクション対策
-      const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
-      return `"${safe.replace(/"/g, '""')}"`;
-    };
-    const csv = "﻿" + [head.map(esc).join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\r\n");
+    // 電話番号は E.164（+81…）のままだと数式扱い対策で ' が付くため、表示形式に変換する
+    const csv = toCsv(head, rows.map((r) => cols.map((c) => (c === "phone" ? displayPhone(r[c] as string | null) : r[c]))));
     return { ok: true, data: csv };
   } catch (e) {
     return fail(e);

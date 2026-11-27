@@ -200,18 +200,30 @@ create or replace function cc_start_call(p_contact uuid, p_idempotency_key text,
                                          p_script uuid default null, p_provider text default 'mock', p_is_demo boolean default true)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  uid uuid := require_user(); reason text; prev jsonb; ph contact_phones; log_id uuid; started timestamptz; list_id uuid;
+  uid uuid := require_user(); reason text; prev jsonb; ph contact_phones; log_id uuid; started timestamptz; list_id uuid; prev_call uuid;
 begin
-  if not can_call_role() or not can_view_contact(p_contact) then
+  if not can_call_role() then raise exception 'FORBIDDEN' using errcode = '42501'; end if;
+  if not can_view_contact(p_contact) then
+    -- 画面を開いている間に許諾撤回・架電禁止で担当が外れた場合は、理由を返して画面に表示する
+    if exists(select 1 from contact_locks where contact_id = p_contact and user_id = uid) then
+      reason := call_block_reason(p_contact, uid);
+      if reason is not null then return jsonb_build_object('error', 'NOT_CALLABLE', 'reason', reason); end if;
+    end if;
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
   select response into prev from idempotency_keys where key = p_idempotency_key and user_id = uid;
   if found then return prev; end if;
 
-  -- 同一担当者の通話中の発信を禁止（二重発信防止）
-  if exists(select 1 from call_logs where user_id = uid and status in ('initiating','ringing','in_progress')
-            and started_at > now() - interval '2 hours') then
-    return jsonb_build_object('error', 'DUPLICATE_DIAL');
+  -- 呼び出し中のまま 2 分以上経った発信（ブラウザ終了・通信断の残骸）は失敗扱いにする
+  update call_logs set status = 'failed', ended_at = now(), duration_sec = 0, error_message = 'stale'
+  where user_id = uid and status in ('initiating','ringing') and started_at < now() - interval '2 minutes'
+    and started_at > now() - interval '1 day';
+
+  -- 同一担当者の通話中の発信を禁止（二重発信防止）。画面から前の通話を終了できるよう ID を返す
+  select id into prev_call from call_logs where user_id = uid and status in ('initiating','ringing','in_progress')
+    and started_at > now() - interval '2 hours' order by started_at desc limit 1;
+  if prev_call is not null then
+    return jsonb_build_object('error', 'DUPLICATE_DIAL', 'callLogId', prev_call);
   end if;
 
   reason := call_block_reason(p_contact, uid);
@@ -272,7 +284,13 @@ declare
   next_at timestamptz; appt_id uuid; max_attempts int := coalesce((rule('max_no_answer_attempts'))::text::int, 6);
   block_days int; advisor uuid; res_id uuid;
 begin
-  if not can_call_role() or not can_view_contact(p_contact) then
+  if not can_call_role() then raise exception 'FORBIDDEN' using errcode = '42501'; end if;
+  if not can_view_contact(p_contact) then
+    -- 画面を開いている間に許諾撤回・架電禁止で担当が外れた場合は、理由を返して画面に表示する
+    if exists(select 1 from contact_locks where contact_id = p_contact and user_id = uid) then
+      reason := call_block_reason(p_contact, uid);
+      if reason is not null then return jsonb_build_object('error', 'NOT_CALLABLE', 'reason', reason); end if;
+    end if;
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
   select response into prev from idempotency_keys where key = p_idempotency_key and user_id = uid;
@@ -452,3 +470,13 @@ language sql stable security definer set search_path = public as $$
                          and r.call_started_at >= date_trunc('month', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo')
   )
 $$;
+
+-- 終了し損ねた自分の通話を手動で終了する（応答済みなら完了、未応答なら中止）
+create or replace function cc_end_call(p_call uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := require_user(); cl call_logs;
+begin
+  select * into cl from call_logs where id = p_call and user_id = uid;
+  if not found then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
+  return cc_update_call(p_call, case when cl.answered_at is null then 'canceled'::call_status else 'completed'::call_status end, null, 'ended_manually');
+end $$;

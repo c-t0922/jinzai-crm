@@ -11,7 +11,7 @@ import { saveResultSchema, type SaveResultInput } from "@/lib/call-result";
 import { can } from "@/lib/permissions";
 import { displayPhone, maskPhone } from "@/lib/format";
 
-export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string; reason?: string; field?: string };
+export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string; reason?: string; field?: string; callLogId?: string };
 
 export type ContactCard = {
   id: string;
@@ -142,7 +142,7 @@ export async function startCall(input: { contactId: string; idempotencyKey: stri
       p_is_demo: cti.isDemo,
     });
     if (error) throw new Error(error.message);
-    if (data.error) return { ok: false, error: data.error, reason: data.reason };
+    if (data.error) return { ok: false, error: data.error, reason: data.reason, callLogId: data.callLogId };
     try {
       const { providerCallId } = await cti.dial({ callLogId: data.callLogId, toE164: data.toE164 });
       await supabase.rpc("cc_update_call", { p_call: data.callLogId, p_status: "ringing", p_provider_call_id: providerCallId });
@@ -221,6 +221,19 @@ export async function todayStats(): Promise<ActionResult<{ calls: number; connec
     const { data, error } = await supabase.rpc("cc_today_stats");
     if (error) throw new Error(error.message);
     return { ok: true, data };
+  } catch (e) {
+    return wrapError(e);
+  }
+}
+
+/** 終了し損ねた自分の通話（ブラウザ終了・通信断の残骸）を終了する */
+export async function endCall(callLogId: string): Promise<ActionResult<null>> {
+  try {
+    await authorize("callcenter.use");
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase.rpc("cc_end_call", { p_call: z.uuid().parse(callLogId) });
+    if (error) throw new Error(error.message);
+    return { ok: true, data: null };
   } catch (e) {
     return wrapError(e);
   }

@@ -11,6 +11,8 @@ import { TaskCheckbox, NewTaskForm, MarkReadButton } from "@/features/appointmen
 
 export const metadata: Metadata = { title: "タスク管理" };
 
+type TaskRow = { id: string; title: string; due_at: string | null; related_type: string | null; related_id: string | null; contacts: { id: string; full_name: string } | { id: string; full_name: string }[] | null };
+
 export default async function TasksPage() {
   const me = await requireUser("appointments.view");
   const supabase = await createSupabaseServer();
@@ -20,39 +22,11 @@ export default async function TasksPage() {
     supabase.from("tasks").select("*, contacts(id, full_name)").eq("assignee_id", me.id).eq("status", "open").order("due_at", { ascending: true, nullsFirst: false }).limit(200),
     supabase.from("notifications").select("*").eq("user_id", me.id).order("created_at", { ascending: false }).limit(30),
   ]);
-  const list = tasks.data ?? [];
+  const list = (tasks.data ?? []) as TaskRow[];
   const overdue = list.filter((t) => t.due_at && new Date(t.due_at) < now);
   const today = list.filter((t) => t.due_at && new Date(t.due_at) >= now && new Date(t.due_at) <= endToday);
   const later = list.filter((t) => !t.due_at || new Date(t.due_at) > endToday);
   const unread = (notes.data ?? []).filter((n) => !n.read_at).length;
-
-  const Section = ({ title, items, tone }: { title: string; items: typeof list; tone?: "rose" }) => (
-    <Card>
-      <CardHeader><CardTitle className={tone === "rose" ? "text-rose-700" : undefined}>{title}</CardTitle><Badge tone={tone ?? "slate"}>{items.length}</Badge></CardHeader>
-      <CardContent className="p-0">
-        {items.length === 0 ? <p className="px-4 py-6 text-center text-xs text-slate-400">ありません</p> : (
-          <ul className="divide-y divide-border">
-            {items.map((t) => {
-              const c = Array.isArray(t.contacts) ? t.contacts[0] : t.contacts;
-              return (
-                <li key={t.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <TaskCheckbox id={t.id} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{t.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {t.due_at ? <span className="tabular">期限 {fmtDateTime(t.due_at)}</span> : "期限なし"}
-                      {c ? <> ・ <Link href={`/contacts/${c.id}`} className="text-accent-blue hover:underline">{c.full_name}</Link></> : null}
-                      {t.related_type === "appointment" && t.related_id ? <> ・ <Link href={`/appointments/${t.related_id}`} className="text-accent-blue hover:underline">アポイント</Link></> : null}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
 
   return (
     <>
@@ -82,5 +56,35 @@ export default async function TasksPage() {
         </Card>
       </PageBody>
     </>
+  );
+}
+
+function Section({ title, items, tone }: { title: string; items: TaskRow[]; tone?: "rose" }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle className={tone === "rose" ? "text-rose-700" : undefined}>{title}</CardTitle><Badge tone={tone ?? "slate"}>{items.length}</Badge></CardHeader>
+      <CardContent className="p-0">
+        {items.length === 0 ? <p className="px-4 py-6 text-center text-xs text-slate-400">ありません</p> : (
+          <ul className="divide-y divide-border">
+            {items.map((t) => {
+              const c = Array.isArray(t.contacts) ? t.contacts[0] : t.contacts;
+              return (
+                <li key={t.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <TaskCheckbox id={t.id} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{t.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {t.due_at ? <span className="tabular">期限 {fmtDateTime(t.due_at)}</span> : "期限なし"}
+                      {c ? <> ・ <Link href={`/contacts/${c.id}`} className="text-accent-blue hover:underline">{c.full_name}</Link></> : null}
+                      {t.related_type === "appointment" && t.related_id ? <> ・ <Link href={`/appointments/${t.related_id}`} className="text-accent-blue hover:underline">アポイント</Link></> : null}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
