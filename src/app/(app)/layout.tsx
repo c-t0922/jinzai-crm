@@ -7,7 +7,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const me = await requireUser();
   const supabase = await createSupabaseServer();
   const { data: rule } = await supabase.from("call_rules").select("value").eq("key", "auto_logout_minutes").maybeSingle();
-  const idle = Number(rule?.value ?? 30);
+  const idle = Number(rule?.value ?? 0);
   return (
     <div className="flex h-dvh overflow-hidden">
       <Sidebar roles={me.roles} />

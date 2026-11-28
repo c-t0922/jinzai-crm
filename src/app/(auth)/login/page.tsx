@@ -2,11 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./login-form";
 import { HashForward } from "./hash-forward";
+import { redirect } from "next/navigation";
+import { getMe } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "ログイン" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reason?: string }> }) {
   const sp = await searchParams;
+  // ログイン済み（この端末にセッションが残っている）なら入力なしで業務画面へ
+  if (!sp.reason && (await getMe())) {
+    const next = sp.next && sp.next.startsWith("/") && !sp.next.startsWith("//") ? sp.next : "/dashboard";
+    redirect(next);
+  }
   return (
     <main className="flex min-h-dvh items-center justify-center bg-surface px-4">
       <HashForward />

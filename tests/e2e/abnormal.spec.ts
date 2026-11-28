@@ -150,12 +150,27 @@ test.describe("架電センター", () => {
     expect(await count()).toBe(before + 1);
   });
 
-  test("一定時間操作がないと自動ログアウト", async ({ page }) => {
+  test("自動ログアウトを設定すると、一定時間操作がないとログアウト", async ({ page }) => {
+    await sql(`update call_rules set value = '30' where key = 'auto_logout_minutes'`);
+    try {
+      await page.clock.install();
+      await login(page, CALLER, "/dashboard");
+      await page.clock.fastForward("31:00");
+      await page.clock.runFor(60_000);
+      await expect(page).toHaveURL(/\/login\?reason=timeout/, { timeout: 20_000 });
+    } finally {
+      await sql(`update call_rules set value = '0' where key = 'auto_logout_minutes'`);
+    }
+  });
+
+  test("既定ではログインを保持し、/login を開いても入力なしで業務画面へ", async ({ page }) => {
     await page.clock.install();
     await login(page, CALLER, "/dashboard");
-    await page.clock.fastForward("31:00");
+    await page.clock.fastForward("02:00:00");
     await page.clock.runFor(60_000);
-    await expect(page).toHaveURL(/\/login\?reason=timeout/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/dashboard/);
   });
 });
 

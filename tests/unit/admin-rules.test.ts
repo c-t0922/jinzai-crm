@@ -14,5 +14,7 @@ describe("架電ルールの入力検証", () => {
   it("数値の範囲", () => {
     expect(RULE_SCHEMAS.export_max_rows.safeParse(0).success).toBe(false);
     expect(RULE_SCHEMAS.auto_logout_minutes.safeParse(1).success).toBe(false);
+    expect(RULE_SCHEMAS.auto_logout_minutes.safeParse(0).success).toBe(true);
+    expect(RULE_SCHEMAS.auto_logout_minutes.safeParse(30).success).toBe(true);
   });
 });
