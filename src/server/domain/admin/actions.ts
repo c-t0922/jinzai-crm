@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { authorize, AppError } from "@/server/auth/session";
@@ -31,13 +32,24 @@ const newUserSchema = z.object({
   teamId: z.uuid().optional(),
 });
 
-/** 招待メールを送り、業務ユーザーとして登録する（パスワードは本人が設定） */
-export async function createUser(input: z.input<typeof newUserSchema>): Promise<R<string>> {
+/** リンクの戻り先（招待・パスワード設定）。プロキシ経由でも本来のホスト名を使う */
+async function siteOrigin() {
+  const h = await headers();
+  return `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+}
+
+/**
+ * 業務ユーザーを登録し、パスワード設定用の招待リンクを発行する。
+ * Supabase 無料プランの標準メールは組織外に届かないため、リンクを管理者に返し、本人へ直接伝えてもらう。
+ */
+export async function createUser(input: z.input<typeof newUserSchema>): Promise<R<{ id: string; link: string }>> {
   try {
     await authorize("admin.users");
     const p = newUserSchema.parse(input);
     const admin = createSupabaseAdmin();
-    const { data: invited, error: invErr } = await admin.auth.admin.inviteUserByEmail(p.email);
+    const { data: invited, error: invErr } = await admin.auth.admin.generateLink({
+      type: "invite", email: p.email, options: { redirectTo: `${await siteOrigin()}/auth/callback` },
+    });
     if (invErr || !invited.user) throw new Error(invErr?.message.includes("already") ? "duplicate key" : "invite failed");
     const supabase = await createSupabaseServer();
     const { data, error } = await supabase.rpc("admin_create_user", {
@@ -48,7 +60,26 @@ export async function createUser(input: z.input<typeof newUserSchema>): Promise<
       throw new Error(error.message);
     }
     revalidatePath("/admin/users");
-    return { ok: true, data: data as string };
+    return { ok: true, data: { id: data as string, link: invited.properties.action_link } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** パスワード（再）設定リンクを発行する（パスワードを忘れた・招待リンクの期限切れ） */
+export async function issuePasswordLink(userId: string): Promise<R<string>> {
+  try {
+    await authorize("admin.users");
+    const supabase = await createSupabaseServer();
+    const { data: u } = await supabase.from("users").select("email, status").eq("id", z.uuid().parse(userId)).maybeSingle();
+    if (!u) throw new AppError("NOT_FOUND", "ユーザーが見つかりません");
+    if (u.status !== "active") throw new AppError("VALIDATION", "利用停止中のユーザーには発行できません");
+    const admin = createSupabaseAdmin();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery", email: u.email, options: { redirectTo: `${await siteOrigin()}/auth/callback` },
+    });
+    if (error) throw new Error("link failed");
+    return { ok: true, data: data.properties.action_link };
   } catch (e) {
     return fail(e);
   }

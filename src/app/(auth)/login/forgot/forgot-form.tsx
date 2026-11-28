@@ -6,7 +6,7 @@ import { requestReset, type ForgotState } from "./actions";
 
 export function ForgotForm() {
   const [state, action, pending] = useActionState<ForgotState, FormData>(requestReset, {});
-  if (state.sent) return <p className="text-sm text-slate-700">登録されているメールアドレスであれば、再設定用のメールを送りました。メールのリンクから新しいパスワードを設定してください。</p>;
+  if (state.sent) return <p className="text-sm text-slate-700">登録されているメールアドレスであれば、再設定用のメールを送りました。メールのリンクから新しいパスワードを設定してください。届かない場合は、管理者に「パスワード設定リンク」の発行を依頼してください。</p>;
   return (
     <form action={action} className="space-y-3">
       <Field label="メールアドレス" htmlFor="email"><Input id="email" name="email" type="email" autoComplete="username" required autoFocus /></Field>
