@@ -12,6 +12,6 @@ export async function requestReset(_prev: ForgotState, form: FormData): Promise<
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const supabase = await createSupabaseServer();
-  await supabase.auth.resetPasswordForEmail(email.data, { redirectTo: `${origin}/auth/confirm` });
+  await supabase.auth.resetPasswordForEmail(email.data, { redirectTo: `${origin}/auth/callback` });
   return { sent: true };
 }

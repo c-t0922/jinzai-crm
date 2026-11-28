@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { ROLE_LABEL, ROLES, type Role } from "@/lib/permissions";
-import { createUser, updateUser } from "@/server/domain/admin/actions";
+import { createUser, issuePasswordLink, updateUser } from "@/server/domain/admin/actions";
 import { fmtDateTime } from "@/lib/format";
 
 export type AdminUser = { id: string; name: string; email: string; status: string; last_login_at: string | null; roles: Role[]; teams: { id: string; isLeader: boolean }[] };
@@ -112,6 +112,7 @@ function EditUser({ user, teams, self, onClose }: { user: AdminUser; teams: Team
           </Field>
           <Button type="submit" className="w-full" disabled={pending || !roles.length}>保存する</Button>
         </form>
+        <PasswordLink userId={user.id} disabled={status !== "active"} />
       </DialogContent>
     </Dialog>
   );
@@ -120,18 +121,29 @@ function EditUser({ user, teams, self, onClose }: { user: AdminUser; teams: Team
 function CreateUser({ open, teams, onClose }: { open: boolean; teams: Team[]; onClose: () => void }) {
   const router = useRouter();
   const [roles, setRoles] = useState<Role[]>(["caller"]);
+  const [link, setLink] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const close = () => { setLink(null); onClose(); };
+  if (link) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && close()}>
+        <DialogContent title="招待リンクを発行しました" description="このリンクを本人に直接送ってください（LINE・社内チャット等）。本人がリンクを開いてパスワードを設定するとログインできます。">
+          <LinkBox link={link} />
+          <Button className="mt-3 w-full" onClick={close}>閉じる</Button>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="ユーザーを招待" description="招待メールが送信され、本人がパスワードを設定します。管理者・PM は初回ログイン時に多要素認証の登録が必要です。">
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent title="ユーザーを招待" description="招待リンクを発行します。本人がリンクを開いてパスワードを設定します。管理者・PM は初回ログイン時に多要素認証の登録が必要です。">
         <form className="space-y-3" onSubmit={(e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
           start(async () => {
             const r = await createUser({ name: String(f.get("name")), email: String(f.get("email")), roles, teamId: String(f.get("team") || "") || undefined });
             if (!r.ok) return void toast.error(r.error);
-            toast.success("招待しました");
-            onClose();
+            setLink(r.data.link);
             router.refresh();
           });
         }}>
@@ -141,9 +153,36 @@ function CreateUser({ open, teams, onClose }: { open: boolean; teams: Team[]; on
           <Field label="所属チーム" htmlFor="n-team">
             <Select id="n-team" name="team"><option value="">所属なし</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
           </Field>
-          <Button type="submit" className="w-full" disabled={pending || !roles.length}>招待する</Button>
+          <Button type="submit" className="w-full" disabled={pending || !roles.length}>招待リンクを発行する</Button>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** 招待・パスワード設定リンクの表示（コピー用） */
+function LinkBox({ link }: { link: string }) {
+  return (
+    <div className="space-y-2">
+      <textarea readOnly value={link} rows={4} className="w-full rounded-md border border-border bg-slate-50 p-2 font-mono text-[11px]" onFocus={(e) => e.currentTarget.select()} aria-label="発行したリンク" data-testid="issued-link" />
+      <Button variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(link).then(() => toast.success("コピーしました"), () => toast.error("コピーできませんでした"))}>リンクをコピー</Button>
+      <p className="text-xs text-slate-500">リンクは一度だけ使えます。有効期限が切れたら「パスワード設定リンクを発行」から再発行してください。</p>
+    </div>
+  );
+}
+
+function PasswordLink({ userId, disabled }: { userId: string; disabled: boolean }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      {link ? <LinkBox link={link} /> : (
+        <Button variant="outline" size="sm" disabled={disabled || pending} onClick={() => start(async () => {
+          const r = await issuePasswordLink(userId);
+          if (!r.ok) return void toast.error(r.error);
+          setLink(r.data);
+        })}>パスワード設定リンクを発行</Button>
+      )}
+    </div>
   );
 }

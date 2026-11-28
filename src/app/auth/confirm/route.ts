@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const tokenHash = sp.get("token_hash");
   const type = sp.get("type") as EmailOtpType | null;
+  const code = sp.get("code");
+  if (code) {
+    // パスワード再設定（PKCE）。同じブラウザで依頼した場合のみ成立する
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return go(error ? "/login?reason=link" : "/set-password");
+  }
   if (tokenHash && type && TYPES.includes(type)) {
     const supabase = await createSupabaseServer();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
