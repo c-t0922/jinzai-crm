@@ -4,9 +4,12 @@ import { requireUser } from "@/server/auth/session";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const me = await requireUser();
   const supabase = await createSupabaseServer();
-  const { data: rule } = await supabase.from("call_rules").select("value").eq("key", "auto_logout_minutes").maybeSingle();
+  // ユーザー情報と設定を並行で取得（DB との往復を 1 回分減らす）
+  const [me, { data: rule }] = await Promise.all([
+    requireUser(),
+    supabase.from("call_rules").select("value").eq("key", "auto_logout_minutes").maybeSingle(),
+  ]);
   const idle = Number(rule?.value ?? 0);
   return (
     <div className="flex h-dvh overflow-hidden">
