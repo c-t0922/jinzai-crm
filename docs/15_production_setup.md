@@ -21,9 +21,9 @@
 
 ## 2. 最初の管理者（社長）
 
-1. Supabase → Authentication → Users → 「Add user」→「Create new user」で本人のメールアドレスを登録（パスワードは本人が後で設定）
+1. Supabase → Authentication → Users → 「Add user」→「Send invitation」で本人のメールアドレスへ招待（Supabase 組織のメンバーには標準メールが届く）
 2. SQL エディタで `select bootstrap_first_admin('メールアドレス', '氏名');`（管理者が 1 人もいない時だけ動く）
-3. 本番 URL の「パスワードを忘れた方」から再設定メールを送り、リンクからパスワードを設定（Supabase 組織のメンバーには届く）
+3. 招待メールのリンクを開くとパスワード設定画面になる（`/login` に # 付きで戻った場合も自動で `/auth/callback` に転送）
 4. 初回ログイン時に多要素認証（認証アプリ）を登録
 
 ## 3. 架電担当者の追加

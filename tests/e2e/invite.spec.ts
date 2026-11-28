@@ -44,6 +44,14 @@ test("token_hash 形式のリンクにも対応", async ({ page }) => {
   await expect(page).toHaveURL(/\/set-password/);
 });
 
+test("Supabase 標準の招待メール（Site URL に # 付きで戻る）でもパスワード設定に進める", async ({ page }) => {
+  const email = `invite3-${Date.now()}@example.test`;
+  const { data } = await admin().auth.admin.generateLink({ type: "invite", email, options: { redirectTo: "http://127.0.0.1:3000/" } });
+  await sql(`insert into users(auth_user_id, name, email) values ($1, '招待 テスト3', $2)`, [data.user!.id, email]);
+  await page.goto(data.properties!.action_link);
+  await expect(page).toHaveURL(/\/set-password/, { timeout: 20_000 });
+});
+
 test("無効なリンクはログイン画面に案内する", async ({ page }) => {
   await page.goto(`/auth/confirm?token_hash=invalid&type=invite`);
   await expect(page).toHaveURL(/\/login\?reason=link/);

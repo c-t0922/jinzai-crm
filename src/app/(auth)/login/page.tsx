@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./login-form";
+import { HashForward } from "./hash-forward";
 
 export const metadata: Metadata = { title: "ログイン" };
 
@@ -8,6 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   return (
     <main className="flex min-h-dvh items-center justify-center bg-surface px-4">
+      <HashForward />
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2">
           <div className="grid size-8 place-items-center rounded-md bg-primary text-sm font-bold text-white">人</div>
