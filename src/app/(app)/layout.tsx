@@ -14,9 +14,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-white pl-12 pr-3 md:pl-4">
           <div id="page-header-slot" className="min-w-0 flex-1" />
-          <span className="mr-3 hidden rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 lg:inline">
-            開発環境・架空データ
-          </span>
+          {process.env.NODE_ENV !== "production" ? (
+            <span className="mr-3 hidden rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 lg:inline">
+              開発環境・架空データ
+            </span>
+          ) : null}
           <UserMenu name={me.name} roles={me.roles} unread={me.unreadNotifications} />
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>

@@ -1,6 +1,6 @@
 -- RLS・権限の検証（pgTAP）。前提：pnpm db:reset で架空データ投入済み
 begin;
-select plan(22);
+select plan(31);
 
 create or replace function pg_temp.login(p_email text) returns void language plpgsql as $$
 declare aid uuid;
@@ -66,6 +66,31 @@ select pg_temp.login('admin@example.test');
 select throws_ok($$select admin_update_user(app_user_id(), 'x', 'suspended', '{admin}', '{}')$$, '42501', null, '管理者は自分自身を利用停止にできない');
 select lives_ok($$select goal_set('org', '2030-01', 'calls', 100)$$, '管理者は目標を設定できる');
 select ok(exists(select 1 from audit_logs where action = 'insert:goals'), '設定変更は操作ログに記録される');
+
+-- ---------- CSV 取り込み ----------
+select pg_temp.logout();
+select pg_temp.login('caller01@example.test');
+select throws_ok($$select import_start('app-test', 1)$$, 'P0001', 'FORBIDDEN', '架電担当者は CSV 取り込みを開始できない');
+select pg_temp.logout();
+select pg_temp.login('admin@example.test');
+create temp table j as select import_start('app-test', 3, '2024年書面同意（テスト）') as id;
+select lives_ok($$select import_contacts((select id from j), '[
+  {"recordId":"T1","lastName":"取込","firstName":"一郎","phones":["+819011110001"],"consent":"granted"},
+  {"recordId":"T2","lastName":"取込","firstName":"二郎","phones":["+819011110001"]},
+  {"recordId":"T3","lastName":"取込","firstName":"三郎","phones":["+819011110003"],"consent":"denied"}
+]'::jsonb, '[{"recordId":"T4","code":"no_name"}]'::jsonb)$$, '管理者は取り込める');
+select is((select count(*)::int from contact_sources where source_app_id = 'app-test'), 3, '3件登録');
+select is((select callable from contacts c join contact_sources s on s.contact_id = c.id where s.source_record_id = 'T2' and s.source_app_id = 'app-test'), false,
+  '許諾列が空の顧客は架電不可');
+select is((select consent_status::text from contacts c join contact_sources s on s.contact_id = c.id where s.source_record_id = 'T1' and s.source_app_id = 'app-test'), 'granted',
+  '根拠付きで許諾ありの顧客のみ許諾反映');
+select is((select count(*)::int from duplicate_candidates d join contact_sources s on s.contact_id in (d.contact_id_a, d.contact_id_b)
+  where s.source_app_id = 'app-test' and s.source_record_id = 'T2'), 1, '同じ電話番号は重複候補になり統合しない');
+select lives_ok($$select import_contacts((select id from j), '[{"recordId":"T1","lastName":"取込","firstName":"一郎改","phones":["+819011110001"]},
+  {"recordId":"T3","lastName":"取込","firstName":"三郎","consent":"granted"}]'::jsonb)$$, '再投入できる');
+select is((select count(*)::int from contact_sources where source_app_id = 'app-test'), 3, '再投入しても二重登録しない');
+select is((select consent_status::text from contacts c join contact_sources s on s.contact_id = c.id where s.source_record_id = 'T3' and s.source_app_id = 'app-test'), 'denied',
+  '拒否済みの顧客は取り込みで許諾に戻らない');
 
 -- ---------- 架電禁止の伝播 ----------
 select pg_temp.logout();

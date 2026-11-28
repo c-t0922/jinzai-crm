@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  LayoutDashboard, PhoneCall, Users, ListChecks, CalendarCheck, CalendarDays, CheckSquare, UserRound, MessagesSquare, Briefcase, Building2, KanbanSquare, JapaneseYen, LineChart, Trophy, ListOrdered, Clock, Route, UserCog, UsersRound, Target, Database, Globe, Headphones, FileText, SlidersHorizontal, ShieldCheck, ScrollText, Circle,
+  LayoutDashboard, PhoneCall, Users, ListChecks, CalendarCheck, CalendarDays, CheckSquare, UserRound, MessagesSquare, Briefcase, Building2, KanbanSquare, JapaneseYen, LineChart, Trophy, ListOrdered, Clock, Route, UserCog, UsersRound, Target, Database, Globe, Headphones, FileText, SlidersHorizontal, ShieldCheck, ScrollText, Upload, Circle,
 } from "lucide-react";
 import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { can, type Role } from "@/lib/permissions";
 import { NAV } from "./nav";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard, PhoneCall, Users, ListChecks, CalendarCheck, CalendarDays, CheckSquare, UserRound, MessagesSquare, Briefcase, Building2, KanbanSquare, JapaneseYen, LineChart, Trophy, ListOrdered, Clock, Route, UserCog, UsersRound, Target, Database, Globe, Headphones, FileText, SlidersHorizontal, ShieldCheck, ScrollText, Circle,
+  LayoutDashboard, PhoneCall, Users, ListChecks, CalendarCheck, CalendarDays, CheckSquare, UserRound, MessagesSquare, Briefcase, Building2, KanbanSquare, JapaneseYen, LineChart, Trophy, ListOrdered, Clock, Route, UserCog, UsersRound, Target, Database, Globe, Headphones, FileText, SlidersHorizontal, ShieldCheck, ScrollText, Upload, Circle,
 };
 
 function Icon({ name, className }: { name: string; className?: string }) {

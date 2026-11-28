@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           ) : null}
           <LoginForm next={sp.next} />
         </div>
-        <p className="mt-4 text-center text-xs text-slate-400">開発環境：架空データのみを表示しています</p>
+        {process.env.NODE_ENV !== "production" ? <p className="mt-4 text-center text-xs text-slate-400">開発環境：架空データのみを表示しています</p> : null}
       </div>
     </main>
   );
