@@ -18,5 +18,6 @@
 | 12 | [テスト計画](12_test_plan.md) | 業務シナリオ・異常系・負荷・KPI計算式 |
 | 13 | [未確定事項・仮仕様](13_open_questions.md) | 確認事項と仮仕様 |
 | 14 | [運用手順](14_operations.md) | バックアップ・復元・定期確認 |
+| 15 | [本番環境の構成と運用開始手順](15_production_setup.md) | Netlify・Supabase（無料）、最初の管理者、招待、CSV 取り込み、手動発信 |
 
 プロジェクト全体のルール・禁止事項はリポジトリ直下の [CLAUDE.md](../CLAUDE.md) を参照。
