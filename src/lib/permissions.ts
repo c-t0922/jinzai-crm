@@ -23,6 +23,7 @@ export type Permission =
   | "talent.view"
   | "revenue.view"
   | "analytics.view"
+  | "analytics.segments"
   | "admin.view"
   | "admin.users"
   | "admin.integrations"
@@ -47,6 +48,7 @@ const MATRIX: Record<Permission, Role[]> = {
   "talent.view": ["admin", "pm", "career_advisor"],
   "revenue.view": ["admin", "pm", "career_advisor", "executive"],
   "analytics.view": ["admin", "pm", "team_leader", "caller", "career_advisor", "executive"],
+  "analytics.segments": ["admin", "pm", "executive"],
   "admin.view": ["admin", "pm"],
   "admin.users": ["admin"],
   "admin.integrations": ["admin"],

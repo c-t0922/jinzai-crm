@@ -17,6 +17,9 @@ export const TARGET_FIELDS = {
   email: { label: "メールアドレス", required: false, hints: ["メールアドレス", "メール", "Email", "E-mail", "mail"] },
   pref: { label: "都道府県", required: false, hints: ["都道府県", "住所（都道府県）", "県"] },
   city: { label: "市区町村", required: false, hints: ["市区町村", "住所（市区町村）", "市町村"] },
+  gender: { label: "性別", required: false, hints: ["性別", "男女", "性別（本人）"] },
+  birthDate: { label: "生年月日", required: false, hints: ["生年月日", "誕生日", "生年月日（本人）"] },
+  age: { label: "年齢（生年月日がない場合）", required: false, hints: ["年齢", "年令", "年齢（本人）"] },
   inquiredAt: { label: "初回問合せ日", required: false, hints: ["問合せ日", "問い合わせ日", "反響日", "初回問合せ日", "登録日", "作成日時"] },
   sourceDetail: { label: "流入元の詳細（媒体・LP名）", required: false, hints: ["流入元", "媒体", "反響媒体", "問合せ経路", "流入経路"] },
   consent: { label: "人材事業の利用許諾", required: false, hints: ["人材", "利用許諾", "同意", "キャリア案内"] },
@@ -88,6 +91,49 @@ export function normalizePref(raw: string | null | undefined): string | null {
   return hit ?? null;
 }
 
+/** 「男」「男性」「M」→ male など。判定できなければ null */
+export function normalizeGender(raw: string | null | undefined): "male" | "female" | "other" | null {
+  if (!raw) return null;
+  const v = toHalfWidth(raw).trim().toLowerCase();
+  if (["男", "男性", "m", "male", "1"].includes(v)) return "male";
+  if (["女", "女性", "f", "female", "2"].includes(v)) return "female";
+  if (["その他", "other", "回答しない"].includes(v)) return "other";
+  return null;
+}
+
+const ERA: Record<string, number> = { 明治: 1867, 大正: 1911, 昭和: 1925, 平成: 1988, 令和: 2018, M: 1867, T: 1911, S: 1925, H: 1988, R: 2018 };
+/** 生年月日 → YYYY-MM-DD。西暦・和暦（昭和55年1月2日、S55.1.2）に対応。未来日・1900年より前は null */
+export function parseBirthDate(raw: string | null | undefined, today = new Date()): string | null {
+  if (!raw) return null;
+  const s = toHalfWidth(String(raw)).trim();
+  let y: number, mo: number, d: number;
+  const w = s.match(/^(明治|大正|昭和|平成|令和|[MTSHR])\s*(\d{1,2}|元)[年/.\-](\d{1,2})[月/.\-](\d{1,2})日?$/i);
+  const g = s.match(/^(\d{4})[/\-.年](\d{1,2})[/\-.月](\d{1,2})日?/) ?? s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (w) {
+    y = ERA[w[1].toUpperCase()] ?? ERA[w[1]];
+    y += w[2] === "元" ? 1 : Number(w[2]);
+    mo = Number(w[3]);
+    d = Number(w[4]);
+  } else if (g) {
+    [y, mo, d] = [Number(g[1]), Number(g[2]), Number(g[3])];
+  } else return null;
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCMonth() !== mo - 1 || dt.getTime() > today.getTime()) return null;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** 年齢 → 生まれ年（概算、JST の今年基準） */
+export function birthYearFromAge(raw: string | null | undefined, today = new Date()): number | null {
+  if (!raw) return null;
+  const m = toHalfWidth(String(raw)).trim().match(/^(\d{1,3})\s*(歳|才)?$/);
+  if (!m) return null;
+  const a = Number(m[1]);
+  if (a < 15 || a > 110) return null;
+  const jstYear = new Date(today.getTime() + 9 * 3600_000).getUTCFullYear();
+  return jstYear - a;
+}
+
 export type ConsentRule = { column: number; grantedValues: string[]; deniedValues: string[] };
 
 export type ImportRow = {
@@ -103,6 +149,9 @@ export type ImportRow = {
   inquiredAt: string | null;
   sourceDetail: string | null;
   consent: "granted" | "denied" | null;
+  gender: "male" | "female" | "other" | null;
+  birthDate: string | null;
+  birthYear: number | null;
 };
 
 export type RowResult = { ok: true; row: ImportRow; warnings: string[] } | { ok: false; reason: string };
@@ -146,6 +195,15 @@ export function convertRow(r: string[], map: Mapping, consent?: ConsentRule | nu
     if (v && consent.grantedValues.includes(v)) c = "granted";
     else if (v && consent.deniedValues.includes(v)) c = "denied";
   }
+  const genderRaw = cell(r, map.gender);
+  const gender = normalizeGender(genderRaw);
+  if (genderRaw && !gender) warnings.push("性別の値を判定できません");
+  const bdRaw = cell(r, map.birthDate);
+  const birthDate = parseBirthDate(bdRaw);
+  if (bdRaw && !birthDate) warnings.push("生年月日の形式が不正");
+  const ageRaw = cell(r, map.age);
+  const birthYear = birthDate ? Number(birthDate.slice(0, 4)) : birthYearFromAge(ageRaw);
+  if (!birthDate && ageRaw && birthYear === null) warnings.push("年齢の形式が不正");
   const prefRaw = cell(r, map.pref);
   return {
     ok: true,
@@ -163,6 +221,9 @@ export function convertRow(r: string[], map: Mapping, consent?: ConsentRule | nu
       inquiredAt,
       sourceDetail: cell(r, map.sourceDetail).slice(0, 100) || null,
       consent: c,
+      gender,
+      birthDate,
+      birthYear,
     },
   };
 }

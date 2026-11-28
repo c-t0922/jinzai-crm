@@ -36,6 +36,7 @@ export const NAV: NavGroup[] = [
       { href: "/analytics/lists", label: "リスト別分析", icon: "ListOrdered", perm: "analytics.view" },
       { href: "/analytics/hours", label: "時間帯別分析", icon: "Clock", perm: "analytics.view" },
       { href: "/analytics/sources", label: "流入経路別分析", icon: "Route", perm: "analytics.view" },
+      { href: "/analytics/segments", label: "顧客分析（性別・年代・地域）", icon: "Users", perm: "analytics.segments" },
     ],
   },
   {

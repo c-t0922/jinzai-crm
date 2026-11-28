@@ -123,6 +123,14 @@ async function main() {
       case when b.r1 < 0.02 then 'consult_wanted' end,
       now() - make_interval(days => (b.r1 * 1460)::int)
     from base b, names n`);
+  // 性別・生年月日（架空。約 1 割は不明）
+  await db.query(`
+    update contacts set
+      gender = case when r < 0.45 then 'male' when r < 0.90 then 'female' end,
+      birth_date = case when r2 < 0.85 then date '1960-01-01' + (floor(random() * 365 * 45))::int end,
+      birth_year = null
+    from (select id as cid, random() r, random() r2 from contacts) x where x.cid = contacts.id`);
+  await db.query(`update contacts set birth_year = extract(year from birth_date)::int where birth_date is not null`);
   await db.query(`
     insert into contact_phones(contact_id, phone_raw, phone_e164, phone_hash, type)
     select id, '090-0' || lpad((rn / 10000)::text, 3, '0') || '-' || lpad((rn % 10000)::text, 4, '0'),

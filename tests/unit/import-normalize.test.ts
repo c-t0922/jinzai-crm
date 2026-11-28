@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertRow, guessMapping, isBlockedColumn, normalizePhoneJp, normalizePref, parseDateJst, splitName } from "@/lib/import/normalize";
+import { birthYearFromAge, convertRow, guessMapping, isBlockedColumn, normalizeGender, normalizePhoneJp, normalizePref, parseBirthDate, parseDateJst, splitName } from "@/lib/import/normalize";
 
 describe("電話番号の正規化（架空の番号）", () => {
   it.each([
@@ -59,5 +59,33 @@ describe("1 行の変換", () => {
   it("電話なしは警告付きで取り込む", () => {
     const r = convertRow(["104", "架空 次郎", "", "", "", "", "", "", ""], map);
     expect(r.ok && r.warnings.join()).toContain("有効な電話番号なし");
+  });
+});
+
+describe("性別・生年月日・年齢", () => {
+  it.each([["男", "male"], ["女性", "female"], ["Ｍ", "male"], ["female", "female"], ["その他", "other"], ["?", null], ["", null]])("性別 %s → %s", (raw, v) => expect(normalizeGender(raw)).toBe(v));
+  const today = new Date("2026-11-28T00:00:00Z");
+  it.each([
+    ["1990/4/1", "1990-04-01"],
+    ["19900401", "1990-04-01"],
+    ["昭和55年1月2日", "1980-01-02"],
+    ["S55.1.2", "1980-01-02"],
+    ["平成元年5月6日", "1989-05-06"],
+  ])("生年月日 %s → %s", (raw, v) => expect(parseBirthDate(raw, today)).toBe(v));
+  it.each(["2030/1/1", "1899/12/31", "1990/2/30", "abc"])("生年月日 %s は無効", (raw) => expect(parseBirthDate(raw, today)).toBeNull());
+  it("年齢から生まれ年（JST の今年基準）", () => {
+    expect(birthYearFromAge("35", today)).toBe(1991);
+    expect(birthYearFromAge("３５歳", today)).toBe(1991);
+    expect(birthYearFromAge("5", today)).toBeNull();
+    expect(birthYearFromAge("abc", today)).toBeNull();
+  });
+  it("取り込み行に性別・生年が入る（生年月日を優先）", () => {
+    const r = convertRow(["1", "山田 花子", "女", "1990-04-01", "40"], { recordId: 0, fullName: 1, gender: 2, birthDate: 3, age: 4 });
+    expect(r.ok && r.row).toMatchObject({ gender: "female", birthDate: "1990-04-01", birthYear: 1990 });
+    const r2 = convertRow(["2", "山田 太郎", "", "", "40"], { recordId: 0, fullName: 1, gender: 2, birthDate: 3, age: 4 });
+    expect(r2.ok && r2.row.birthYear).toBe(new Date(Date.now() + 9 * 3600_000).getUTCFullYear() - 40);
+  });
+  it("列名から性別・生年月日・年齢を推測", () => {
+    expect(guessMapping(["レコード番号", "氏名", "性別", "生年月日", "年齢"])).toMatchObject({ gender: 2, birthDate: 3, age: 4 });
   });
 });
