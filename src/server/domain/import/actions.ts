@@ -56,6 +56,9 @@ const rowSchema = z.object({
   inquiredAt: z.iso.datetime().nullable(),
   sourceDetail: str(100).nullable(),
   consent: z.enum(["granted", "denied"]).nullable(),
+  gender: z.enum(["male", "female", "other"]).nullable(),
+  birthDate: z.iso.date().nullable(),
+  birthYear: z.number().int().min(1900).max(2100).nullable(),
 });
 const errSchema = z.object({ recordId: str(64), code: z.string().max(40), message: str(100) });
 const batchSchema = z.object({

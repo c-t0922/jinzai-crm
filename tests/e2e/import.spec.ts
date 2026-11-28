@@ -66,3 +66,24 @@ test("架電担当者は取り込み画面を開けない", async ({ page }) => 
   await page.goto("/admin/import");
   await expect(page.getByTestId("csv-file")).toHaveCount(0);
 });
+
+test.describe("顧客分析（性別・年代・居住地）", () => {
+  test("管理者は人数の集計と共有用テキストを見られる（個人情報は出ない）", async ({ page }) => {
+    await login(page, "admin@example.test", "/analytics/segments");
+    await expect(page.getByTestId("segments-summary")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("segments-age-gender")).toContainText("30代");
+    await expect(page.getByTestId("segments-pref")).toContainText("東京都");
+    await page.getByTestId("share-toggle").click();
+    const text = await page.getByTestId("share-text").inputValue();
+    expect(text).toContain("■ 年代×性別");
+    expect(text).not.toMatch(/@example\.test|\+81|090-/);
+    await page.getByRole("link", { name: "架電可能のみ" }).click();
+    await expect(page).toHaveURL(/scope=callable/);
+    await expect(page.getByTestId("segments-summary")).toContainText("架電可能な顧客");
+  });
+
+  test("架電担当者は顧客分析を開けない", async ({ page }) => {
+    await login(page, "caller01@example.test", "/analytics/segments");
+    await expect(page).toHaveURL(/\/forbidden/);
+  });
+});

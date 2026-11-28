@@ -1,6 +1,6 @@
 -- RLS・権限の検証（pgTAP）。前提：pnpm db:reset で架空データ投入済み
 begin;
-select plan(31);
+select plan(36);
 
 create or replace function pg_temp.login(p_email text) returns void language plpgsql as $$
 declare aid uuid;
@@ -96,6 +96,24 @@ select is((select consent_status::text from contacts c join contact_sources s on
 select pg_temp.logout();
 select is((select count(*) from contacts c join suppression_list s on s.contact_id = c.id and s.released_at is null where c.callable)::int, 0,
   '架電禁止の顧客は架電可能にならない');
+
+-- ---------- 顧客分析（性別・年代・居住地） ----------
+select pg_temp.logout();
+select pg_temp.login('caller01@example.test');
+select throws_ok($$select contact_segments()$$, 'P0001', 'FORBIDDEN', '架電担当者は顧客分析を見られない');
+select pg_temp.logout();
+select pg_temp.login('admin@example.test');
+select ok((select bool_and(not (e ? 'last_name') and not (e ? 'full_name') and not (e ? 'email') and e ? 'n')
+           from jsonb_array_elements(contact_segments()) e), '顧客分析は人数のみ返し、氏名・連絡先を含まない');
+create temp table j2 as select import_start('app-test-2', 2) as id;
+select lives_ok($$select import_contacts((select id from j2), '[
+  {"recordId":"G1","lastName":"属性","firstName":"一","phones":[],"gender":"female","birthDate":"1990-04-01","birthYear":1990},
+  {"recordId":"G2","lastName":"属性","firstName":"二","phones":[],"gender":"unknown-value","birthYear":1985}
+]'::jsonb)$$, '性別・生年月日つきで取り込める');
+select is((select gender || ':' || birth_date::text || ':' || birth_year from contacts c join contact_sources s on s.contact_id = c.id
+           where s.source_app_id = 'app-test-2' and s.source_record_id = 'G1'), 'female:1990-04-01:1990', '性別・生年月日が保存される');
+select is((select coalesce(gender, 'null') || ':' || birth_year from contacts c join contact_sources s on s.contact_id = c.id
+           where s.source_app_id = 'app-test-2' and s.source_record_id = 'G2'), 'null:1985', '不正な性別は保存せず、年齢由来の生まれ年は保存する');
 
 select * from finish();
 rollback;
