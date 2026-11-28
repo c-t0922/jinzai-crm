@@ -52,3 +52,34 @@ export class MockDevice implements CallDevice {
     this.onStatus?.(s);
   }
 }
+
+/**
+ * 手動発信の端末。担当者が手持ちの電話でかけ、結果をボタンで記録する。
+ * dial で「呼び出し中」にし、mark で「通話中・不在・話し中」、hangup で終話にする。
+ */
+export class ManualDevice implements CallDevice {
+  private status: DeviceStatus | null = null;
+  private onStatus: ((s: DeviceStatus) => void) | null = null;
+
+  dial(onStatus: (s: DeviceStatus) => void) {
+    this.onStatus = onStatus;
+    this.emit("ringing");
+  }
+
+  mark(s: "in_progress" | "no_answer" | "busy") {
+    if (this.status !== "ringing") return;
+    this.emit(s);
+  }
+
+  hangup() {
+    if (this.status === "in_progress") this.emit("completed");
+    else if (this.status === "ringing") this.emit("canceled");
+  }
+
+  setMuted() {}
+
+  private emit(s: DeviceStatus) {
+    this.status = s;
+    this.onStatus?.(s);
+  }
+}

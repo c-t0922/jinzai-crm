@@ -8,7 +8,7 @@ export interface CallStatusEvent {
 }
 
 export interface CtiProvider {
-  readonly name: "mock" | "twilio";
+  readonly name: "mock" | "manual" | "twilio";
   /** デモ通話（実際には発信しない）なら true。画面に「デモ通話」と常時表示する */
   readonly isDemo: boolean;
   issueClientToken(userId: string): Promise<{ token: string; expiresAt: Date }>;

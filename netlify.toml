@@ -1,0 +1,17 @@
+# Netlify（無料プラン）で本番運用する設定。鍵は Netlify の環境変数に入力し、ここには書かない。
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # 実行時の既定値：CTI は manual（手持ちの電話で発信）、管理者・PM の MFA は必須。
+  # 変更する場合は Netlify の環境変数（CTI_MODE / MFA_ENFORCE）で設定する。
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "same-origin"
+    Permissions-Policy = "camera=(), geolocation=()"

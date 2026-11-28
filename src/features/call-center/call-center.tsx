@@ -4,7 +4,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ExternalLink, Headphones, Keyboard, Loader2, Mic, MicOff,
-  Phone, PhoneOff, RefreshCw, SkipForward, WifiOff,
+  Copy, Phone, PhoneCall, PhoneMissed, PhoneOff, RefreshCw, SkipForward, WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import {
   endCall, getQueue, heartbeat, nextContact, openContact, releaseContact, reportCallStatus, saveDraft, saveResult, startCall, todayStats,
   type ContactCard,
 } from "@/server/domain/calls/actions";
-import { MockDevice, type CallDevice, type DeviceStatus } from "./mock-device";
+import { ManualDevice, MockDevice, type CallDevice, type DeviceStatus } from "./mock-device";
 import { clearLocalDraft, pushPending, readLocalDraft, readPending, writeLocalDraft, writePending } from "./pending-queue";
 
 type QueueItem = {
@@ -76,6 +76,7 @@ export function CallCenter(props: {
   userName: string;
 }) {
   const { masters, scripts, advisors, isDemo } = props;
+  const manual = props.ctiMode === "manual";
   const [tab, setTab] = useState<Tab>("today");
   const [queue, setQueue] = useState<Queue | null>(null);
   const [queueError, setQueueError] = useState(false);
@@ -108,7 +109,7 @@ export function CallCenter(props: {
   const [showKeys, setShowKeys] = useState(false);
   const [, startTransition] = useTransition();
 
-  const device = useRef<CallDevice>(new MockDevice());
+  const device = useRef<CallDevice>(manual ? new ManualDevice() : new MockDevice());
   const dialKey = useRef<string>(uuid());
   const saveKey = useRef<string>(uuid());
   const dirty = useRef(false);
@@ -445,7 +446,7 @@ export function CallCenter(props: {
   }, [save, hangup, dial, toggleMute, masters, contact, call]);
 
   // ---------- 表示 ----------
-  const elapsed = call ? Math.floor(((call.endedAt ?? now) - (call.answeredAt ?? call.startedAt)) / 1000) : 0;
+  const elapsed = call ? Math.max(0, Math.floor(((call.endedAt ?? now) - (call.answeredAt ?? call.startedAt)) / 1000)) : 0;
   const script = scripts.find((s) => s.id === scriptId);
   const goalPct = stats?.goalAppointments ? Math.min(100, Math.round((stats.monthAppointments / stats.goalAppointments) * 100)) : null;
 
@@ -469,10 +470,10 @@ export function CallCenter(props: {
           {!online ? (
             <Badge tone="rose"><WifiOff className="size-3" /> オフライン</Badge>
           ) : null}
-          <span className={cn("hidden items-center gap-1 sm:flex", mics ? "text-slate-500" : "text-amber-700")} title="マイク・ヘッドセットの検出状況">
+          {manual ? null : <span className={cn("hidden items-center gap-1 sm:flex", mics ? "text-slate-500" : "text-amber-700")} title="マイク・ヘッドセットの検出状況">
             <Headphones className="size-3.5" /> {mics === null ? "確認中" : mics > 0 ? `マイク ${mics}台` : "マイク未検出"}
-          </span>
-          {isDemo ? <Badge tone="violet" data-testid="demo-badge" title="デモ通話（実際には発信されません）">デモ通話<span className="hidden sm:inline">（実際には発信されません）</span></Badge> : <Badge tone="navy">実通話</Badge>}
+          </span>}
+          {isDemo ? <Badge tone="violet" data-testid="demo-badge" title="デモ通話（実際には発信されません）">デモ通話<span className="hidden sm:inline">（実際には発信されません）</span></Badge> : manual ? <Badge tone="navy" data-testid="manual-badge" title="手持ちの電話で発信し、結果をボタンで記録します">手持ち電話で発信</Badge> : <Badge tone="navy">実通話</Badge>}
           <button type="button" onClick={() => setShowKeys((v) => !v)} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="ショートカット一覧">
             <Keyboard className="size-4" />
           </button>
@@ -619,9 +620,11 @@ export function CallCenter(props: {
                       <PhoneOff /> 終話 <kbd className="ml-1 rounded bg-white/20 px-1 text-[10px]">Ctrl+E</kbd>
                     </Button>
                   )}
-                  <Button variant="outline" onClick={toggleMute} disabled={!inCall} aria-pressed={call?.muted}>
-                    {call?.muted ? <MicOff /> : <Mic />} {call?.muted ? "ミュート中" : "ミュート"}
-                  </Button>
+                  {manual ? null : (
+                    <Button variant="outline" onClick={toggleMute} disabled={!inCall} aria-pressed={call?.muted}>
+                      {call?.muted ? <MicOff /> : <Mic />} {call?.muted ? "ミュート中" : "ミュート"}
+                    </Button>
+                  )}
                   <div className="ml-1 flex flex-col">
                     <span className="tabular text-xl font-semibold" data-testid="call-timer">{fmtDuration(elapsed)}</span>
                     <span className="text-[11px] text-slate-500" data-testid="call-status">
@@ -634,6 +637,13 @@ export function CallCenter(props: {
                     <SkipForward /> スキップ
                   </Button>
                 </div>
+                {manual && call && (call.status === "ringing" || call.status === "in_progress") && call.displayNumber ? (
+                  <ManualDialPanel
+                    number={call.displayNumber}
+                    status={call.status}
+                    onMark={(s) => (device.current as ManualDevice).mark(s)}
+                  />
+                ) : null}
               </div>
 
               {/* スクリプト／履歴 */}
@@ -809,6 +819,29 @@ export function CallCenter(props: {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+/** 手持ち電話での発信：番号を大きく表示し（スマホではタップで発信）、つながった／不在／話し中を記録する */
+function ManualDialPanel({ number, status, onMark }: { number: string; status: string; onMark: (s: "in_progress" | "no_answer" | "busy") => void }) {
+  const tel = number.replace(/[^\d+]/g, "");
+  return (
+    <div className="mt-3 rounded-md border border-accent-blue/30 bg-blue-50/60 p-3" data-testid="manual-panel">
+      <p className="text-xs text-slate-600">{status === "ringing" ? "お手元の電話でこの番号にかけてください" : "通話中です。終わったら「終話」を押してください"}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        <a href={`tel:${tel}`} className="tabular text-2xl font-semibold tracking-wide text-accent-blue underline-offset-4 hover:underline" data-testid="manual-number">{number}</a>
+        <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(tel).then(() => toast.success("番号をコピーしました"), () => toast.error("コピーできませんでした"))}>
+          <Copy /> コピー
+        </Button>
+      </div>
+      {status === "ringing" ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button variant="success" onClick={() => onMark("in_progress")} data-testid="manual-answered"><PhoneCall /> つながった</Button>
+          <Button variant="outline" onClick={() => onMark("no_answer")} data-testid="manual-no-answer"><PhoneMissed /> 不在</Button>
+          <Button variant="outline" onClick={() => onMark("busy")} data-testid="manual-busy"><PhoneOff /> 話し中</Button>
+        </div>
+      ) : null}
     </div>
   );
 }
