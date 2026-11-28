@@ -62,13 +62,47 @@ async function toCard(raw: RawCard | null, rolesCanSeeFull: boolean): Promise<Co
   };
 }
 
+/**
+ * 読み取り専用の処理だけ、API 層の権限チェックと DB 問い合わせを並行で走らせる（往復 1 回分の短縮）。
+ * 権限チェックに失敗したら結果は捨てて例外にする。DB 側でも RPC 内で権限を検証している。
+ */
+async function readAuthorized<T>(fn: () => Promise<T>): Promise<T> {
+  const auth = authorize("callcenter.use");
+  const data = fn();
+  data.catch(() => undefined); // 権限エラー時の未処理拒否を防ぐ
+  await auth;
+  return data;
+}
+
+const tabSchema = z.enum(["today", "recall", "new", "untouched"]);
+type Stats = { calls: number; connects: number; appointments: number; goalAppointments: number | null; monthAppointments: number };
+
+async function rpcQueue(tab: string) {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase.rpc("cc_queue", { p_tab: tabSchema.parse(tab), p_limit: 100 });
+  if (error) throw new Error(error.message);
+  return data as unknown;
+}
+async function rpcStats() {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase.rpc("cc_today_stats");
+  if (error) throw new Error(error.message);
+  return data as Stats;
+}
+
 export async function getQueue(tab: string): Promise<ActionResult<unknown>> {
   try {
-    await authorize("callcenter.use");
-    const supabase = await createSupabaseServer();
-    const { data, error } = await supabase.rpc("cc_queue", { p_tab: z.enum(["today", "recall", "new", "untouched"]).parse(tab), p_limit: 100 });
-    if (error) throw new Error(error.message);
-    return { ok: true, data };
+    return { ok: true, data: await readAuthorized(() => rpcQueue(tab)) };
+  } catch (e) {
+    return wrapError(e);
+  }
+}
+
+/** 左の架電キューと今日の実績をまとめて取得（サーバーアクションは 1 件ずつ順に処理されるため、呼び出し回数を減らす） */
+export async function getSidePanel(tab: string): Promise<ActionResult<{ queue: unknown; stats: Stats }>> {
+  try {
+    const [queue, stats] = await readAuthorized(() => Promise.all([rpcQueue(tab), rpcStats()]));
+    return { ok: true, data: { queue, stats } };
   } catch (e) {
     return wrapError(e);
   }
@@ -214,13 +248,9 @@ export async function saveDraft(contactId: string, payload: Record<string, unkno
   }
 }
 
-export async function todayStats(): Promise<ActionResult<{ calls: number; connects: number; appointments: number; goalAppointments: number | null; monthAppointments: number }>> {
+export async function todayStats(): Promise<ActionResult<Stats>> {
   try {
-    await authorize("callcenter.use");
-    const supabase = await createSupabaseServer();
-    const { data, error } = await supabase.rpc("cc_today_stats");
-    if (error) throw new Error(error.message);
-    return { ok: true, data };
+    return { ok: true, data: await readAuthorized(rpcStats) };
   } catch (e) {
     return wrapError(e);
   }

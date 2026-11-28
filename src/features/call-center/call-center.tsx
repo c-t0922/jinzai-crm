@@ -16,7 +16,7 @@ import { fmtDate, fmtDateTime, fmtDuration } from "@/lib/format";
 import { BLOCK_REASON_LABEL, fieldsFor, validateResult, type ResultMaster, type SaveResultInput } from "@/lib/call-result";
 import { fromLocalInput, presetJst } from "@/lib/datetime-local";
 import {
-  endCall, getQueue, heartbeat, nextContact, openContact, releaseContact, reportCallStatus, saveDraft, saveResult, startCall, todayStats,
+  endCall, getQueue, getSidePanel, heartbeat, nextContact, openContact, releaseContact, reportCallStatus, saveDraft, saveResult, startCall, todayStats,
   type ContactCard,
 } from "@/server/domain/calls/actions";
 import { ManualDevice, MockDevice, type CallDevice, type DeviceStatus } from "./mock-device";
@@ -134,6 +134,15 @@ export function CallCenter(props: {
     const r = await todayStats();
     if (r.ok) setStats(r.data);
   }, []);
+  /** キューと実績を 1 回の通信で更新 */
+  const loadSide = useCallback(async (t: Tab) => {
+    const r = await getSidePanel(t);
+    if (r.ok) {
+      setQueue(r.data.queue as Queue);
+      setQueueError(false);
+      setStats(r.data.stats);
+    } else setQueueError(true);
+  }, []);
 
   const resetForContact = useCallback((c: ContactCard | null) => {
     setCall(null);
@@ -188,9 +197,14 @@ export function CallCenter(props: {
     [inCall, resetForContact],
   );
 
+  // 初回はキューより先に「次の顧客」を取得する（サーバーアクションは順番に処理されるため）。タブ切替時のみここで取得
+  const tabMounted = useRef(false);
   useEffect(() => {
+    if (!tabMounted.current) {
+      tabMounted.current = true;
+      return;
+    }
     // サーバーからの取得開始（読み込み中表示の更新を含む）。外部データとの同期なので effect で行う
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadQueue(tab);
   }, [tab, loadQueue]);
 
@@ -199,13 +213,12 @@ export function CallCenter(props: {
     // 開発時の StrictMode で 2 回実行されてもロックを二重取得しない
     if (booted.current) return;
     booted.current = true;
-    loadStats();
     // localStorage はクライアントでしか読めないため、マウント後に反映する（SSR との不一致を避ける）
     setPending(readPending().length);
     // 初回の顧客取得（外部データとの同期）
+    // 顧客を先に表示し、キューと実績はその後にまとめて取得する
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (props.initialContactId) open(props.initialContactId);
-    else loadNext();
+    void (props.initialContactId ? open(props.initialContactId) : loadNext()).then(() => loadSide(tab));
     navigator.mediaDevices
       ?.enumerateDevices?.()
       .then((d) => setMics(d.filter((x) => x.kind === "audioinput").length))
@@ -391,12 +404,12 @@ export function CallCenter(props: {
       clearLocalDraft(contact.id);
       for (const a of res.data.actions) toast.success(ACTION_LABEL[a.type] ?? "保存しました", a.at ? { description: `次回：${fmtDateTime(a.at)}` } : undefined);
     }
-    startTransition(() => {
-      loadQueue(tab);
-      loadStats();
-    });
+    // 次の顧客を最優先で表示し、キューと実績はその後に 1 回でまとめて更新する
     await loadNext(contact.id);
-  }, [contact, saving, inCall, call, masters, tab, loadQueue, loadStats, loadNext]);
+    startTransition(() => {
+      void loadSide(tab);
+    });
+  }, [contact, saving, inCall, call, masters, tab, loadSide, loadNext]);
 
   const skip = useCallback(async () => {
     if (!contact || inCall) return;
