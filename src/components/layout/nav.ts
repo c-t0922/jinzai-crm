@@ -44,6 +44,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/users", label: "ユーザー管理", icon: "UserCog", perm: "admin.users" },
       { href: "/admin/teams", label: "チーム管理", icon: "UsersRound", perm: "admin.teams" },
       { href: "/admin/goals", label: "KPI目標設定", icon: "Target", perm: "admin.goals" },
+      { href: "/admin/import", label: "顧客CSV取り込み", icon: "Upload", perm: "admin.integrations" },
       { href: "/admin/kintone", label: "kintone連携", icon: "Database", perm: "admin.integrations", phase: 2 },
       { href: "/admin/lp", label: "LP連携", icon: "Globe", perm: "admin.integrations", phase: 4 },
       { href: "/admin/cti", label: "CTI連携", icon: "Headphones", perm: "admin.integrations", phase: 2 },
