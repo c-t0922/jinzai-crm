@@ -14,10 +14,11 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data } = await supabase.auth.getUser();
+  // getClaims：期限切れならトークンを更新し、署名はローカルで検証する（Auth サーバーへの往復を省く）
+  const { data } = await supabase.auth.getClaims();
   const path = request.nextUrl.pathname;
   const isPublic = path.startsWith("/login") || path.startsWith("/auth/") || path.startsWith("/api/webhooks");
-  if (!data.user && !isPublic) {
+  if (!data?.claims && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = path === "/" ? "" : `?next=${encodeURIComponent(path)}`;
