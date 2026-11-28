@@ -8,6 +8,6 @@ export const RULE_SCHEMAS = {
   max_no_answer_attempts: z.number().int().min(1).max(30),
   lock_ttl_minutes: z.number().int().min(1).max(60),
   export_max_rows: z.number().int().min(1).max(50000),
-  auto_logout_minutes: z.number().int().min(5).max(480),
+  auto_logout_minutes: z.number().int().min(0).max(480).refine((v) => v === 0 || v >= 5, "0（無効）または 5〜480 分で指定してください"),
 } as const;
 export type EditableRule = keyof typeof RULE_SCHEMAS;

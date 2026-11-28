@@ -47,7 +47,7 @@ export function RulesForm({ rules, editable }: { rules: Record<string, unknown>;
     max_no_answer_attempts: ["不通の最大再架電回数", "到達すると自動でクローズ", "回"],
     lock_ttl_minutes: ["架電ロックの有効時間", "他の担当者が同じ顧客を開けない時間", "分"],
     export_max_rows: ["CSV出力の上限件数", "1回あたり", "件"],
-    auto_logout_minutes: ["自動ログアウト", "無操作がこの時間続くとログアウト", "分"],
+    auto_logout_minutes: ["自動ログアウト", "無操作がこの時間続くとログアウト。0 にするとログインを保持（共用PCでは 30 などを推奨）", "分"],
   };
   const dis = !editable || pending;
   return (

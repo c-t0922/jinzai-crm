@@ -40,6 +40,7 @@ export function UserMenu({ name, roles, unread }: { name: string; roles: Role[];
 export function IdleLogout({ minutes }: { minutes: number }) {
   const last = useRef(0);
   useEffect(() => {
+    if (!(minutes > 0)) return; // 0 = 自動ログアウトしない（ログインを保持）
     last.current = Date.now();
     const bump = () => (last.current = Date.now());
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart", "crm:activity"];
