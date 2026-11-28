@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 // Cache Components は使わず、従来の動的レンダリングで運用する（docs/02 参照）。
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   turbopack: {
     rules: {
       "*.css": {
