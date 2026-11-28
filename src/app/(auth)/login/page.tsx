@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "ログイン" };
@@ -20,7 +21,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {sp.reason === "timeout" ? (
             <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">一定時間操作がなかったため、自動でログアウトしました。</p>
           ) : null}
+          {sp.reason === "link" ? (
+            <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">リンクが無効か、有効期限が切れています。管理者に再招待を依頼するか、パスワードの再設定を行ってください。</p>
+          ) : null}
+          {sp.reason === "unregistered" ? (
+            <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">このアカウントは CRM に登録されていません。管理者にお問い合わせください。</p>
+          ) : null}
           <LoginForm next={sp.next} />
+          <p className="mt-3 text-right text-xs"><Link href="/login/forgot" className="text-accent-blue hover:underline">パスワードを忘れた方</Link></p>
         </div>
         {process.env.NODE_ENV !== "production" ? <p className="mt-4 text-center text-xs text-slate-400">開発環境：架空データのみを表示しています</p> : null}
       </div>
